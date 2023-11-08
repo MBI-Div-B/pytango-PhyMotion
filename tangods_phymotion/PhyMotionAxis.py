@@ -359,6 +359,9 @@ class PhyMotionAxis(Device):
                 self.set_state(DevState.MOVING)
             if any([self._statusbits[n] for n in [1, 11, 12, 13, 14, 15]]):
                 self.set_state(DevState.FAULT)
+            if any([self._statusbits[n] for n in [12]]):
+                # reset limit switch error
+                self.reset_errors()
 
     # attribute read/write methods
     def read_hw_limit_minus(self):
