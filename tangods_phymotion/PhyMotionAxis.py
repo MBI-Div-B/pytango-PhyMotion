@@ -24,7 +24,7 @@ class MovementUnit(IntEnum):
     degree = 3
 
 
-class InitiatorType(IntEnum):
+class LimitSwitchType(IntEnum):
     NCC_NCC_NCC = 0
     NCC_NCC_NOC = 1
     NOC_NCC_NCC = 2
@@ -33,6 +33,22 @@ class InitiatorType(IntEnum):
     NCC_NOC_NOC = 5
     NOC_NOC_NCC = 6
     NOC_NOC_NOC = 7
+
+
+class StepResolution(IntEnum):
+    step_1_1 = 0
+    step_1_2 = 1
+    step_2_5 = 2
+    step_1_4 = 3
+    step_1_5 = 4
+    step_1_8 = 5
+    step_1_10 = 6
+    step_1_16 = 7
+    step_1_20 = 8
+    step_1_32 = 9
+    step_1_64 = 10
+    step_1_128 = 11
+
 
 _PHY_AXIS_STATUS_CODES = [
     "Axis busy",  # 0
@@ -94,18 +110,32 @@ class PhyMotionAxis(Device):
     )
 
     sw_limit_minus = attribute(
+        dtype="bool",
+        label="SW limit -",
+        access=AttrWriteType.READ,
+        display_level=DispLevel.OPERATOR,
+    )
+
+    sw_limit_plus = attribute(
+        dtype="bool",
+        label="SW limit +",
+        access=AttrWriteType.READ,
+        display_level=DispLevel.OPERATOR,
+    )
+
+    sw_limit_minus_pos = attribute(
         dtype="float",
         format="%8.3f",
-        label="SW limit -",
+        label="SW limit - position",
         unit="steps",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
     )
 
-    sw_limit_plus = attribute(
+    sw_limit_plus_pos = attribute(
         dtype="float",
         format="%8.3f",
-        label="SW limit +",
+        label="SW limit + position",
         unit="steps",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -162,10 +192,15 @@ class PhyMotionAxis(Device):
         label="hold current",
         unit="A",
         min_value=0,
-        max_value=2.5,
-        format="%2.1f",
+        max_value=6.5,
+        format="%3.2f",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
+        doc=(
+            "I1AM01: 0 to 2.50 A_rms\n"
+            "I1AM02: 0 to 3.50 A_rms\n"
+            "I1AM02 LPS: 0 to 6.50 A_rms\n"
+        )
     )
 
     run_current = attribute(
@@ -173,15 +208,20 @@ class PhyMotionAxis(Device):
         label="run current",
         unit="A",
         min_value=0,
-        max_value=2.5,
-        format="%2.1f",
+        max_value=6.5,
+        format="%3.2f",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
+        doc=(
+            "I1AM01: 0 to 2.50 A_rms\n"
+            "I1AM02: 0 to 3.50 A_rms\n"
+            "I1AM02 LPS: 0 to 6.50 A_rms\n"
+        )
     )
 
-    initiator_type = attribute(
-        dtype=InitiatorType,
-        label="initiator type",
+    limit_switch_type = attribute(
+        dtype=LimitSwitchType,
+        label="limit switch type",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
         doc=(
@@ -198,15 +238,10 @@ class PhyMotionAxis(Device):
     )
 
     step_resolution = attribute(
-        dtype="int",
+        dtype=StepResolution,
         label="step resolution",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
-        doc=(
-            "Step resolution index.\n0 = Full step\n1 = Half step\n2 = 1/2.5 step\n"
-            "3 = 1/4 step\n4 = 1/5 step\n5 = 1/8 step\n6 = 1/10 step\n7 = 1/16 step\n"
-            "8 = 1/20 step\n9 = 1/32 step\n10 = 1/64 step\n11 = 1/128 step"
-        ),
     )
 
     backlash_compensation = attribute(
@@ -224,9 +259,9 @@ class PhyMotionAxis(Device):
         display_level=DispLevel.EXPERT,
         doc=(
             "0 = rotation; limit switched are ignored.\n"
-            "1 = linear; only hardware limit switches active.\n"
-            "2 = linear; only software limit switches active.\n"
-            "3 = linear; hardware and software limit switches active."
+            "1 = linear; only hardware limit switches monitored.\n"
+            "2 = linear; only software limit switches monitored.\n"
+            "3 = linear; hardware and software limit switches monitored."
         ),
     )
 
@@ -343,7 +378,14 @@ class PhyMotionAxis(Device):
         else:
             return bool(self._statusbits[8])
 
-    def write_sw_limit_minus(self, value):
+    def read_sw_limit_minus_pos(self):
+        ret = float(self.send_cmd("P24R"))
+        if self.__Inverted:
+            return -1 * ret
+        else:
+            return ret
+
+    def write_sw_limit_minus_pos(self, value):
         if self.__Inverted:
             value = -1 * value
         self.send_cmd("P24S{:f}".format(value))
@@ -352,9 +394,16 @@ class PhyMotionAxis(Device):
         if self.__Inverted:
             return bool(self._statusbits[8])
         else:
-            return bool(self._statusbits[7])
+            return bool(self._statusbits[7])    
 
-    def write_sw_limit_plus(self, value):
+    def read_sw_limit_plus_pos(self):
+        ret = float(self.send_cmd("P23R"))
+        if self.__Inverted:
+            return -1 * ret
+        else:
+            return ret
+    
+    def write_sw_limit_plus_pos(self, value):
         if self.__Inverted:
             value = -1 * value
         self.send_cmd("P23S{:f}".format(value))
@@ -372,9 +421,6 @@ class PhyMotionAxis(Device):
         answer = self.send_cmd("A{:.10f}".format(value))
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
-
-    def read_alias(self):
-        return self.Alias
 
     def read_inverted(self):
         return self.__Inverted
@@ -401,37 +447,33 @@ class PhyMotionAxis(Device):
         self.send_cmd("P08S{:d}".format(value))
 
     def read_run_current(self):
-        return float(self.send_cmd("P41R")) / 10
+        return float(self.send_cmd("P41R")) / 100
 
     def write_run_current(self, value):
-        value = int(value * 10)
-        if value not in range(0, 26):
-            return "input not in range 0..25"
+        value = int(value * 100)
         self.send_cmd("P41S{:d}".format(value))
 
     def read_hold_current(self):
-        return float(self.send_cmd("P40R")) / 10
+        return float(self.send_cmd("P40R")) / 100
 
     def write_hold_current(self, value):
-        value = int(value * 10)
-        if value not in range(0, 26):
-            return "input not in range 0..25"
+        value = int(value * 100)
         self.send_cmd("P40S{:d}".format(value))
 
-    def read_initiator_type(self):
+    def read_limit_switch_type(self):
         value = self.send_cmd("P27R")
-        return InitiatorType(int(value))
+        return LimitSwitchType(int(value))
 
-    def write_initiator_type(self, value):
+    def write_limit_switch_type(self, value):
         self.send_cmd("P27S{:d}".format(int(value)))
 
     def read_steps_per_unit(self):
-        # inverse of spindle pitch (see manual page 50)
+        # inverse of spindle pitch (see manual page 77)
         self.__Steps_Per_Unit = 1 / float(self.send_cmd("P03R"))
         return self.__Steps_Per_Unit
 
     def write_steps_per_unit(self, value):
-        # inverse of spindle pitch (see manual page 50)
+        # inverse of spindle pitch (see manual page 77)
         self.send_cmd("P03S{:10.8f}".format(1 / value))
         # update display unit
         self.set_display_unit()
@@ -441,7 +483,7 @@ class PhyMotionAxis(Device):
 
     def write_step_resolution(self, value):
         if value not in range(14):
-            raise ValueError(f"Invalid step resolution index: {value} not in (0-13)")
+            raise ValueError(f"Invalid step resolution index: {value} not in (0-12)")
         self.send_cmd("P45S{:d}".format(value))
 
     def read_backlash_compensation(self):
@@ -482,7 +524,7 @@ class PhyMotionAxis(Device):
 
     # internal methods
     def set_display_unit(self):
-        attributes = [b"position", b"sw_limit_minus", b"sw_limit_plus"]
+        attributes = [b"position", b"sw_limit_minus_pos", b"sw_limit_plus_pos"]
         for attr in attributes:
             ac3 = self.get_attribute_config_3(attr)
             ac3[0].unit = self.__Unit.name.encode("utf-8")
