@@ -275,10 +275,6 @@ class PhyMotionAxis(Device):
 
     # private class properties
     __NACK = chr(0x15)  # command failed
-    __LIM_PLUS = 2
-    __LIM_MINUS = 1
-    __HW_Limit_Minus = False
-    __HW_Limit_Plus = False
     __Inverted = False
     __Unit = MovementUnit.step
     __Steps_Per_Unit = 1.0
@@ -346,7 +342,7 @@ class PhyMotionAxis(Device):
         # -> limit max. query rate to 5 Hz
         now = time.time()
         if now - self._last_status_query > 0.2:
-            answer = self.ctrl.write_read(f"SE{self.Axis}.1")
+            answer = self.send_cmd("SE")
             self.debug_stream(f"status: {answer}")
             self._last_status_query = now
             self._statusbits = self._decode_status(int(answer), 7)
@@ -363,7 +359,6 @@ class PhyMotionAxis(Device):
                 self.set_state(DevState.MOVING)
             if any([self._statusbits[n] for n in [1, 11, 12, 13, 14, 15]]):
                 self.set_state(DevState.FAULT)
-
 
     # attribute read/write methods
     def read_hw_limit_minus(self):
@@ -551,7 +546,6 @@ class PhyMotionAxis(Device):
         dtype_in=str, dtype_out=str, doc_in="enter a command", doc_out="the response"
     )
     def send_cmd(self, cmd):
-        # add axis name (X, Y) to beginning of command
         return self._send_cmd(cmd)
 
     @command(dtype_in=float, doc_in="position")
@@ -600,6 +594,11 @@ class PhyMotionAxis(Device):
     @command
     def abort(self):
         self.send_cmd("SN")
+        self.set_state(DevState.ON)    
+
+    @command
+    def reset_errors(self):
+        self.send_cmd("SEC")
         self.set_state(DevState.ON)
 
     @command(dtype_out=str)
