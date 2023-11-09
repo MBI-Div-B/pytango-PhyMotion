@@ -80,18 +80,15 @@ _PHY_AXIS_STATUS_CODES = [
 
 class PhyMotionAxis(Device):
     # device properties
-    CtrlDevice = device_property(dtype="str", default_value="domain/family/member")
+    CtrlDevice = device_property(
+        dtype="str",
+        default_value="domain/family/member"
+    )
 
     Axis = device_property(
         dtype="int16",
         default_value=1,
         doc="Module number in controller (starts at 1)."
-    )
-
-    Type = device_property(
-        dtype="str",
-        default_value='I1AM01',
-        doc="Either I1AM01 or I1AM02 stepper module are supported."
     )
 
     # device attributes
