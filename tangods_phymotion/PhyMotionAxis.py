@@ -401,22 +401,18 @@ class PhyMotionAxis(Device):
             return ret
 
     def write_position(self, value):
+        memorize_value = value
         if self._inverted:
             value = -1 * value
         answer = self.send_cmd("A{:.10f}".format(value))
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
-            DeviceProxy(self.get_name()).write_attribute("last_position", value)
+            DeviceProxy(self.get_name()).write_attribute("last_position", memorize_value)
 
     def read_last_position(self):
-        if self._inverted:
-            return -1 * self._last_position
-        else:
-            return self._last_position
+        return self._last_position
 
     def write_last_position(self, value):
-        if self._inverted:
-            value = -1 * value
         self._last_position = value
 
     def read_inverted(self):
@@ -577,6 +573,10 @@ class PhyMotionAxis(Device):
         if self._inverted:
             value = -1 * value
         self.send_cmd("P20S{:.4f}".format(value))
+
+    @command()
+    def restore_position(self):
+        self.set_position(self._last_position)
 
     @command
     def jog_plus(self):
