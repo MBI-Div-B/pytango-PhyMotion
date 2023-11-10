@@ -8,6 +8,7 @@ from tango.server import Device, attribute, command
 import sys
 from enum import IntEnum
 import time
+import tango
 
 
 class MovementType(IntEnum):
@@ -304,7 +305,7 @@ class PhyMotionAxis(Device):
                 self._inverted = False
         except Exception:
             self._inverted = False
-        
+
         self.set_state(DevState.ON)
 
     def delete_device(self):
@@ -405,7 +406,7 @@ class PhyMotionAxis(Device):
         answer = self.send_cmd("A{:.10f}".format(value))
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
-            self.last_position = value
+            DeviceProxy(self.get_name()).write_attribute("last_position", value)
 
     def read_last_position(self):
         if self._inverted:
@@ -414,10 +415,9 @@ class PhyMotionAxis(Device):
             return self._last_position
 
     def write_last_position(self, value):
-        print(value)
         if self._inverted:
             value = -1 * value
-        self._last_position = float(value)
+        self._last_position = value
 
     def read_inverted(self):
         return self._inverted
