@@ -360,7 +360,10 @@ class PhyMotionAxis(Device):
                 self.set_state(DevState.ON)
             if any([self._statusbits[n] for n in [0, 16, 21, 22, 23]]):
                 self.set_state(DevState.MOVING)
-            if any([self._statusbits[n] for n in [1, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15]]):
+            if any([self._statusbits[n] for n in [4, 5, 6, 7, 8, 12]]) and int(self._all_parameters["P01R"]) > 0:
+                # no alarm for rotational stages
+                self.set_state(DevState.ALARM)
+            if any([self._statusbits[n] for n in [1, 11, 13, 14, 15]]):
                 self.set_state(DevState.FAULT)
             if any([self._statusbits[n] for n in [12]]):
                 # reset limit switch error on module
