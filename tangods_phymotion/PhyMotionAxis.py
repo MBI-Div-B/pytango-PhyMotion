@@ -249,7 +249,13 @@ class PhyMotionAxis(Device):
     _steps_per_unit = 1.0
     _last_status_query = 0
     _statusbits = 25 * [0]
-    _all_parameters = {}
+
+    # decorators
+    def update_parameters(func): 
+        def inner(self, value): 
+            func(self, value) 
+            self.read_all_parameters()
+        return inner 
 
     def init_device(self):
         super().init_device()
@@ -264,6 +270,9 @@ class PhyMotionAxis(Device):
             self.error_stream("failed to create proxy to {:s}".format(df))
             sys.exit(255)
 
+        # read all parameters
+        self.read_all_parameters()
+        
         # read memorized attributes from Database
         self.db = Database()
         try:
@@ -276,6 +285,7 @@ class PhyMotionAxis(Device):
                 self._inverted = False
         except Exception:
             self._inverted = False
+        
         self.set_state(DevState.ON)
 
     def delete_device(self):
@@ -336,10 +346,11 @@ class PhyMotionAxis(Device):
     # attribute read/write methods
     def read_sw_limit_minus(self):
         if self._inverted:
-            return -1 * float(self.send_cmd("P23R"))
+            return -1 * float(self._all_parameters['P23R'])
         else:
-            return float(self.send_cmd("P24R"))
+            return float(self._all_parameters['P24R'])
 
+    @update_parameters
     def write_sw_limit_minus(self, value):
         if self._inverted:
             self.send_cmd("P23S{:f}".format(-1 * value))
@@ -348,10 +359,11 @@ class PhyMotionAxis(Device):
 
     def read_sw_limit_plus(self):
         if self._inverted:
-            return -1 * float(self.send_cmd("P24R"))
+            return -1 * float(self._all_parameters['P24R'])
         else:
-            return float(self.send_cmd("P23R"))
+            return float(self._all_parameters['P23R'])
     
+    @update_parameters
     def write_sw_limit_plus(self, value):
         if self._inverted:
             self.send_cmd("P24S{:f}".format(-1*value))
@@ -365,6 +377,7 @@ class PhyMotionAxis(Device):
         else:
             return ret
 
+    @update_parameters
     def write_position(self, value):
         if self._inverted:
             value = -1 * value
@@ -379,49 +392,55 @@ class PhyMotionAxis(Device):
         self._inverted = bool(value)
 
     def read_acceleration(self):
-        return int(self.send_cmd("P15R"))
+        return int(self._all_parameters["P15R"])
 
+    @update_parameters
     def write_acceleration(self, value):
         self.send_cmd("P15S{:d}".format(value))
 
     def read_velocity(self):
-        return int(self.send_cmd("P14R"))
+        return int(self._all_parameters["P14R"])
 
+    @update_parameters
     def write_velocity(self, value):
         self.send_cmd("P14S{:d}".format(value))
 
     def read_homing_velocity(self):
-        return int(self.send_cmd("P08R"))
+        return int(self._all_parameters["P08R"])
 
+    @update_parameters
     def write_homing_velocity(self, value):
         self.send_cmd("P08S{:d}".format(value))
 
     def read_run_current(self):
-        return float(self.send_cmd("P41R")) / 100
+        return float(self._all_parameters["P41R"]) / 100
 
+    @update_parameters
     def write_run_current(self, value):
         value = int(value * 100)
         self.send_cmd("P41S{:d}".format(value))
 
     def read_hold_current(self):
-        return float(self.send_cmd("P40R")) / 100
+        return float(self._all_parameters["P40R"]) / 100
 
+    @update_parameters
     def write_hold_current(self, value):
         value = int(value * 100)
         self.send_cmd("P40S{:d}".format(value))
 
     def read_limit_switch_type(self):
-        value = self.send_cmd("P27R")
-        return LimitSwitchType(int(value))
+        return LimitSwitchType(int(self._all_parameters["P27R"]))
 
+    @update_parameters
     def write_limit_switch_type(self, value):
         self.send_cmd("P27S{:d}".format(int(value)))
 
     def read_steps_per_unit(self):
         # inverse of spindle pitch (see manual page 77)
-        self._steps_per_unit = 1 / float(self.send_cmd("P03R"))
+        self._steps_per_unit = 1 / float(self._all_parameters["P03R"])
         return self._steps_per_unit
 
+    @update_parameters
     def write_steps_per_unit(self, value):
         # inverse of spindle pitch (see manual page 77)
         self.send_cmd("P03S{:10.8f}".format(1 / value))
@@ -429,34 +448,36 @@ class PhyMotionAxis(Device):
         self.set_display_unit()
 
     def read_step_resolution(self):
-        return int(self.send_cmd("P45R"))
+        return int(self._all_parameters["P45R"])
 
+    @update_parameters
     def write_step_resolution(self, value):
         if value not in range(14):
             raise ValueError(f"Invalid step resolution index: {value} not in (0-12)")
         self.send_cmd("P45S{:d}".format(value))
 
     def read_backlash_compensation(self):
-        ret = float(self.send_cmd("P25R"))
+        ret = float(self._all_parameters["P25R"])
         if self._inverted:
             return -1 * ret
         else:
             return ret
 
+    @update_parameters
     def write_backlash_compensation(self, value):
         if self._inverted:
             value = -1 * value
         self.send_cmd("P25S{:f}".format(float(value)))
 
     def read_type_of_movement(self):
-        value = int(self.send_cmd("P01R"))
-        return MovementType(value)
+        return MovementType(int(self._all_parameters["P01R"]))
 
+    @update_parameters
     def write_type_of_movement(self, value):
         self.send_cmd("P01S{:d}".format(int(value)))
 
     def read_movement_unit(self):
-        res = int(self.send_cmd("P02R"))
+        res = int(self._all_parameters["P02R"])
         if res == 1:
             self._unit = MovementUnit.steps
         elif res == 2:
@@ -465,8 +486,10 @@ class PhyMotionAxis(Device):
             self._unit = MovementUnit.inch
         elif res == 4:
             self._unit = MovementUnit.degree
+        self._unit = MovementUnit(res-1)
         return self._unit
 
+    @update_parameters
     def write_movement_unit(self, value):
         self.send_cmd("P02S{:d}".format(int(value + 1)))
         self.read_movement_unit()
@@ -489,10 +512,16 @@ class PhyMotionAxis(Device):
                 ac3[0].format = b"%8.3f"
             self.set_attribute_config_3(ac3)
 
-    def _send_cmd(self, cmd):
+    def _send_cmd(self, cmd_str):
         # add module address to beginning of command
-        cmd = '{:d}.1{:s}'.format(self.Axis, cmd)
-        res = self.ctrl.write_read(cmd)
+        if isinstance(cmd_str, list):
+            cmd = ""
+            for sub_cmd in cmd_str:
+                cmd = cmd + ' ' + '{:d}.1{:s}'.format(self.Axis, sub_cmd)
+            res = self.ctrl.write_read(cmd).split(chr(6))
+        else:
+            cmd = '{:d}.1{:s}'.format(self.Axis, cmd_str)
+            res = self.ctrl.write_read(cmd)
         if res == self.__NACK:
             self.set_state(DevState.FAULT)
             self.warn_stream(
@@ -566,15 +595,27 @@ class PhyMotionAxis(Device):
         self.info_stream("parameters written to EEPROM")
         return "parameters written to EEPROM"
 
-    @command(dtype_out=str)
+    @command()
     def read_all_parameters(self):
-        parameters = range(1, 50)
+        self._all_parameters = {}
+        # generate list of commands
+        cmd_list = []
+        for par in range(1, 59):
+            cmd_str = "P{:02d}R".format(par)
+            cmd_list.append(cmd_str)
+        # query list of commands
+        ret = self.send_cmd(cmd_list)
+        # parse response
+        for i, cmd_str in enumerate(cmd_list):
+            self._all_parameters[cmd_str] = ret[i]
+
+    @command(dtype_out=str)
+    def dump_all_parameters(self):
+        self.read_all_parameters()
         res = ""
-        for par in parameters:
+        for par in range(1, 59):
             cmd = "P{:02d}R".format(par)
-            ret = self.send_cmd(cmd)
-            self._all_parameters[par] = ret
-            res = res + "P{:02d}: {:s}\n".format(par, str(ret))
+            res = res + "P{:02d}: {:s}\n".format(par, str(self._all_parameters[cmd]))
         return res
 
 
