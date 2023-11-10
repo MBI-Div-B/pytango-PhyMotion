@@ -91,6 +91,13 @@ class PhyMotionAxis(Device):
         doc="Module number in controller (starts at 1)."
     )
 
+    TimeOut = device_property(
+        dtype="float",
+        default_value=0.2,
+        doc="Timeout in seconds between status requests in order to reduce com traffic."
+    )
+
+    # device attributes
     sw_limit_minus = attribute(
         dtype="float",
         format="%8.3f",
@@ -116,6 +123,17 @@ class PhyMotionAxis(Device):
         unit="steps",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.OPERATOR,
+    )
+
+    last_position = attribute(
+        dtype="float",
+        format="%8.3f",
+        label="last position",
+        unit="steps",
+        memorized = True,
+        hw_memorized = True,
+        access=AttrWriteType.READ_WRITE,
+        display_level=DispLevel.EXPERT,
     )
 
     inverted = attribute(
@@ -155,6 +173,7 @@ class PhyMotionAxis(Device):
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
     )
+
     hold_current = attribute(
         dtype="float",
         label="hold current",
@@ -316,11 +335,14 @@ class PhyMotionAxis(Device):
         # axis state query takes 10 ms (per axis!) on phymotion over TCP
         # -> limit max. query rate to 5 Hz
         now = time.time()
-        if now - self._last_status_query > 0.2:
-            answer = self.send_cmd("SE")
-            self.debug_stream(f"status: {answer}")
+        if now - self._last_status_query > self.TimeOut:
+            status, position = self.send_cmd(["SE", "P20R"])
+            self.debug_stream(f"status: {status}")
+            self.debug_stream(f"position: {position}")
             self._last_status_query = now
-            self._statusbits = self._decode_status(int(answer), 7)
+            self._statusbits = self._decode_status(int(status), 7)
+
+            self._all_parameters['P20R'] = position
 
             status_list = []
             for n, bit_value in enumerate(self._statusbits):
@@ -371,19 +393,31 @@ class PhyMotionAxis(Device):
             self.send_cmd("P23S{:f}".format(value))
 
     def read_position(self):
-        ret = float(self.send_cmd("P20R"))
+        ret = float(self._all_parameters['P20R'])
         if self._inverted:
             return -1 * ret
         else:
             return ret
 
-    @update_parameters
     def write_position(self, value):
         if self._inverted:
             value = -1 * value
         answer = self.send_cmd("A{:.10f}".format(value))
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
+            self.last_position = value
+
+    def read_last_position(self):
+        if self._inverted:
+            return -1 * self._last_position
+        else:
+            return self._last_position
+
+    def write_last_position(self, value):
+        print(value)
+        if self._inverted:
+            value = -1 * value
+        self._last_position = float(value)
 
     def read_inverted(self):
         return self._inverted
@@ -499,6 +533,7 @@ class PhyMotionAxis(Device):
     def set_display_unit(self):
         attributes = [
             "position",
+            "last_position",
             "sw_limit_minus",
             "sw_limit_plus",
             "backlash_compensation"
