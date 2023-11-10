@@ -18,7 +18,7 @@ class MovementType(IntEnum):
 
 
 class MovementUnit(IntEnum):
-    step = 0
+    steps = 0
     mm = 1
     inch = 2
     degree = 3
@@ -55,11 +55,11 @@ _PHY_AXIS_STATUS_CODES = [
     "Command invalid",  # 1
     "Axis waits for synchronisation",  # 2
     "Axis initialised",  # 3
-    "Axis limit switch +",  # 4
-    "Axis limit switch -",  # 5
-    "Axis limit switch center",  # 6
-    "Axis limit switch software +",  # 7
-    "Axis limit switch software -",  # 8
+    "Axis limit+ switch",  # 4
+    "Axis limit- switch",  # 5
+    "Axis limit center switch",  # 6
+    "Axis limit+ software switch",  # 7
+    "Axis limit- software switch",  # 8
     "Axis power stage is ready",  # 9
     "Axis is in the ramp",  # 10
     "Axis internal error",  # 11
@@ -91,36 +91,7 @@ class PhyMotionAxis(Device):
         doc="Module number in controller (starts at 1)."
     )
 
-    # device attributes
-    hw_limit_minus = attribute(
-        dtype="bool",
-        label="HW limit -",
-        access=AttrWriteType.READ,
-        display_level=DispLevel.OPERATOR,
-    )
-
-    hw_limit_plus = attribute(
-        dtype="bool",
-        label="HW limit +",
-        access=AttrWriteType.READ,
-        display_level=DispLevel.OPERATOR,
-    )
-
     sw_limit_minus = attribute(
-        dtype="bool",
-        label="SW limit -",
-        access=AttrWriteType.READ,
-        display_level=DispLevel.OPERATOR,
-    )
-
-    sw_limit_plus = attribute(
-        dtype="bool",
-        label="SW limit +",
-        access=AttrWriteType.READ,
-        display_level=DispLevel.OPERATOR,
-    )
-
-    sw_limit_minus_pos = attribute(
         dtype="float",
         format="%8.3f",
         label="SW limit - position",
@@ -129,7 +100,7 @@ class PhyMotionAxis(Device):
         display_level=DispLevel.EXPERT,
     )
 
-    sw_limit_plus_pos = attribute(
+    sw_limit_plus = attribute(
         dtype="float",
         format="%8.3f",
         label="SW limit + position",
@@ -242,9 +213,10 @@ class PhyMotionAxis(Device):
     )
 
     backlash_compensation = attribute(
-        dtype="int",
+        dtype="float",
+        format="%8.3f",
         label="backlash compensation",
-        unit="step",
+        unit="steps",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
     )
@@ -267,16 +239,17 @@ class PhyMotionAxis(Device):
         label="unit",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
-        doc="Allowed unit values are step, mm, inch, degree",
+        doc="Allowed unit values are steps, mm, inch, degree",
     )
 
     # private class properties
     __NACK = chr(0x15)  # command failed
-    __Inverted = False
-    __Unit = MovementUnit.step
-    __Steps_Per_Unit = 1.0
+    _inverted = False
+    _unit = MovementUnit.steps
+    _steps_per_unit = 1.0
     _last_status_query = 0
     _statusbits = 25 * [0]
+    _all_parameters = {}
 
     def init_device(self):
         super().init_device()
@@ -298,17 +271,12 @@ class PhyMotionAxis(Device):
                 self.get_name(), ["inverted"]
             )
             if attr["inverted"]["__value"][0] == "true":
-                self.__Inverted = True
+                self._inverted = True
             else:
-                self.__Inverted = False
+                self._inverted = False
         except Exception:
-            self.__Inverted = False
+            self._inverted = False
         self.set_state(DevState.ON)
-
-        if self.Type == "I1AM02":
-            self._max_current = 2.5
-        else:
-            self._max_current = 3.5
 
     def delete_device(self):
         self.set_state(DevState.OFF)
@@ -347,81 +315,68 @@ class PhyMotionAxis(Device):
             status_list = []
             for n, bit_value in enumerate(self._statusbits):
                 if bit_value:
-                    status_list.append(_PHY_AXIS_STATUS_CODES[n])
+                    if (n == 4 or n == 7) and self._inverted:
+                        status_list.append(_PHY_AXIS_STATUS_CODES[n+1])
+                    elif (n == 5 or n == 8) and self._inverted:
+                        status_list.append(_PHY_AXIS_STATUS_CODES[n-1])
+                    else:
+                        status_list.append(_PHY_AXIS_STATUS_CODES[n])
             self.set_status("\n".join(status_list))
 
-            if any([self._statusbits[n] for n in [3, 4, 5, 6, 7, 8, 19]]):
+            if any([self._statusbits[n] for n in [3, 19]]):
                 self.set_state(DevState.ON)
             if any([self._statusbits[n] for n in [0, 16, 21, 22, 23]]):
                 self.set_state(DevState.MOVING)
-            if any([self._statusbits[n] for n in [1, 11, 12, 13, 14, 15]]):
+            if any([self._statusbits[n] for n in [1, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15]]):
                 self.set_state(DevState.FAULT)
             if any([self._statusbits[n] for n in [12]]):
-                # reset limit switch error
+                # reset limit switch error on module
                 self.reset_errors()
 
     # attribute read/write methods
-    def read_hw_limit_minus(self):
-        return bool(self._statusbits[5])
-
-    def read_hw_limit_plus(self):
-        return bool(self._statusbits[4])
-
     def read_sw_limit_minus(self):
-        if self.__Inverted:
-            return bool(self._statusbits[7])
+        if self._inverted:
+            return -1 * float(self.send_cmd("P23R"))
         else:
-            return bool(self._statusbits[8])
+            return float(self.send_cmd("P24R"))
 
-    def read_sw_limit_minus_pos(self):
-        ret = float(self.send_cmd("P24R"))
-        if self.__Inverted:
-            return -1 * ret
+    def write_sw_limit_minus(self, value):
+        if self._inverted:
+            self.send_cmd("P23S{:f}".format(-1 * value))
         else:
-            return ret
-
-    def write_sw_limit_minus_pos(self, value):
-        if self.__Inverted:
-            value = -1 * value
-        self.send_cmd("P24S{:f}".format(value))
+            self.send_cmd("P24S{:f}".format(value))
 
     def read_sw_limit_plus(self):
-        if self.__Inverted:
-            return bool(self._statusbits[8])
+        if self._inverted:
+            return -1 * float(self.send_cmd("P24R"))
         else:
-            return bool(self._statusbits[7])    
-
-    def read_sw_limit_plus_pos(self):
-        ret = float(self.send_cmd("P23R"))
-        if self.__Inverted:
-            return -1 * ret
-        else:
-            return ret
+            return float(self.send_cmd("P23R"))
     
-    def write_sw_limit_plus_pos(self, value):
-        if self.__Inverted:
-            value = -1 * value
-        self.send_cmd("P23S{:f}".format(value))
+    def write_sw_limit_plus(self, value):
+        if self._inverted:
+            self.send_cmd("P24S{:f}".format(-1*value))
+        else:
+            self.send_cmd("P23S{:f}".format(value))
 
     def read_position(self):
         ret = float(self.send_cmd("P20R"))
-        if self.__Inverted:
+        if self._inverted:
             return -1 * ret
         else:
             return ret
 
     def write_position(self, value):
-        if self.__Inverted:
+        if self._inverted:
             value = -1 * value
         answer = self.send_cmd("A{:.10f}".format(value))
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
 
     def read_inverted(self):
-        return self.__Inverted
+        return self._inverted
 
     def write_inverted(self, value):
-        self.__Inverted = bool(value)
+        self._inverted = bool(value)
 
     def read_acceleration(self):
         return int(self.send_cmd("P15R"))
@@ -464,8 +419,8 @@ class PhyMotionAxis(Device):
 
     def read_steps_per_unit(self):
         # inverse of spindle pitch (see manual page 77)
-        self.__Steps_Per_Unit = 1 / float(self.send_cmd("P03R"))
-        return self.__Steps_Per_Unit
+        self._steps_per_unit = 1 / float(self.send_cmd("P03R"))
+        return self._steps_per_unit
 
     def write_steps_per_unit(self, value):
         # inverse of spindle pitch (see manual page 77)
@@ -482,16 +437,16 @@ class PhyMotionAxis(Device):
         self.send_cmd("P45S{:d}".format(value))
 
     def read_backlash_compensation(self):
-        ret = int(self.send_cmd("P25R"))
-        if self.__Inverted:
+        ret = float(self.send_cmd("P25R"))
+        if self._inverted:
             return -1 * ret
         else:
             return ret
 
     def write_backlash_compensation(self, value):
-        if self.__Inverted:
+        if self._inverted:
             value = -1 * value
-        self.send_cmd("P25S{:d}".format(int(value)))
+        self.send_cmd("P25S{:f}".format(float(value)))
 
     def read_type_of_movement(self):
         value = int(self.send_cmd("P01R"))
@@ -503,14 +458,14 @@ class PhyMotionAxis(Device):
     def read_movement_unit(self):
         res = int(self.send_cmd("P02R"))
         if res == 1:
-            self.__Unit = MovementUnit.step
+            self._unit = MovementUnit.steps
         elif res == 2:
-            self.__Unit = MovementUnit.mm
+            self._unit = MovementUnit.mm
         elif res == 3:
-            self.__Unit = MovementUnit.inch
+            self._unit = MovementUnit.inch
         elif res == 4:
-            self.__Unit = MovementUnit.degree
-        return self.__Unit
+            self._unit = MovementUnit.degree
+        return self._unit
 
     def write_movement_unit(self, value):
         self.send_cmd("P02S{:d}".format(int(value + 1)))
@@ -519,11 +474,16 @@ class PhyMotionAxis(Device):
 
     # internal methods
     def set_display_unit(self):
-        attributes = [b"position", b"sw_limit_minus_pos", b"sw_limit_plus_pos"]
+        attributes = [
+            "position",
+            "sw_limit_minus",
+            "sw_limit_plus",
+            "backlash_compensation"
+            ]
         for attr in attributes:
             ac3 = self.get_attribute_config_3(attr)
-            ac3[0].unit = self.__Unit.name.encode("utf-8")
-            if (1 / self.__Steps_Per_Unit % 1) == 0.0:
+            ac3[0].unit = self._unit.name.encode("utf-8")
+            if (1 / self._steps_per_unit % 1) == 0.0:
                 ac3[0].format = b"%8d"
             else:
                 ac3[0].format = b"%8.3f"
@@ -550,13 +510,13 @@ class PhyMotionAxis(Device):
 
     @command(dtype_in=float, doc_in="position")
     def set_position(self, value):
-        if self.__Inverted:
+        if self._inverted:
             value = -1 * value
         self.send_cmd("P20S{:.4f}".format(value))
 
     @command
     def jog_plus(self):
-        if self.__Inverted:
+        if self._inverted:
             self.send_cmd("L-")
         else:
             self.send_cmd("L+")
@@ -564,7 +524,7 @@ class PhyMotionAxis(Device):
 
     @command
     def jog_minus(self):
-        if self.__Inverted:
+        if self._inverted:
             self.send_cmd("L+")
         else:
             self.send_cmd("L-")
@@ -572,7 +532,7 @@ class PhyMotionAxis(Device):
 
     @command
     def homing_plus(self):
-        if self.__Inverted:
+        if self._inverted:
             self.send_cmd("R-")
         else:
             self.send_cmd("R+")
@@ -580,7 +540,7 @@ class PhyMotionAxis(Device):
 
     @command
     def homing_minus(self):
-        if self.__Inverted:
+        if self._inverted:
             self.send_cmd("R+")
         else:
             self.send_cmd("R-")
@@ -599,7 +559,6 @@ class PhyMotionAxis(Device):
     @command
     def reset_errors(self):
         self.send_cmd("SEC")
-        self.set_state(DevState.ON)
 
     @command(dtype_out=str)
     def write_to_eeprom(self):
@@ -608,12 +567,14 @@ class PhyMotionAxis(Device):
         return "parameters written to EEPROM"
 
     @command(dtype_out=str)
-    def dump_config(self):
+    def read_all_parameters(self):
         parameters = range(1, 50)
         res = ""
         for par in parameters:
             cmd = "P{:02d}R".format(par)
-            res = res + "P{:02d}: {:s}\n".format(par, str(self.send_cmd(cmd)))
+            ret = self.send_cmd(cmd)
+            self._all_parameters[par] = ret
+            res = res + "P{:02d}: {:s}\n".format(par, str(ret))
         return res
 
 
