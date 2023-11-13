@@ -2,13 +2,13 @@
 # coding: utf8
 # PhyMotionAxis
 
-from tango import Database, DevFailed, AttrWriteType, DevState, DeviceProxy, DispLevel
+from tango import Database, DevFailed, AttrWriteType, DevState
+from tango import DeviceProxy, DispLevel
 from tango.server import device_property
 from tango.server import Device, attribute, command
 import sys
 from enum import IntEnum
 import time
-import tango
 
 
 class MovementType(IntEnum):
@@ -79,6 +79,7 @@ _PHY_AXIS_STATUS_CODES = [
     "Axis SYNC allowed",  # 24
 ]
 
+
 class PhyMotionAxis(Device):
     # device properties
     CtrlDevice = device_property(
@@ -95,7 +96,10 @@ class PhyMotionAxis(Device):
     TimeOut = device_property(
         dtype="float",
         default_value=0.2,
-        doc="Timeout in seconds between status requests in order to reduce com traffic."
+        doc=(
+            "Timeout in seconds between status requests\n"
+            "to reduce communication traffic."
+        )
     )
 
     # device attributes
@@ -131,8 +135,8 @@ class PhyMotionAxis(Device):
         format="%8.3f",
         label="last position",
         unit="steps",
-        memorized = True,
-        hw_memorized = True,
+        memorized=True,
+        hw_memorized=True,
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
     )
@@ -273,7 +277,7 @@ class PhyMotionAxis(Device):
     # decorators
     def update_parameters(func):
         """update_parameters
-        
+
         decorator for setter-methods of attributes in order to update
         the values of all parameters/attributes of the DS.
         """
@@ -297,7 +301,7 @@ class PhyMotionAxis(Device):
 
         # read all parameters
         self.read_all_parameters()
-        
+
         # read memorized attributes from Database
         self.db = Database()
         try:
@@ -395,7 +399,7 @@ class PhyMotionAxis(Device):
             return -1 * float(self._all_parameters['P24R'])
         else:
             return float(self._all_parameters['P23R'])
-    
+
     @update_parameters
     def write_sw_limit_plus(self, value):
         if self._inverted:
@@ -417,26 +421,8 @@ class PhyMotionAxis(Device):
         answer = self.send_cmd("A{:.10f}".format(value))
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            DeviceProxy(self.get_name()).write_attribute("last_position", memorize_value)
+            DeviceProxy(self.get_name()).write_attribute(
+                "last_position", memorize_value)
 
     def read_last_position(self):
         return self._last_position
@@ -592,7 +578,9 @@ class PhyMotionAxis(Device):
 
     # commands
     @command(
-        dtype_in=str, dtype_out=str, doc_in="enter a command", doc_out="the response"
+        dtype_in=str, dtype_out=str,
+        doc_in="enter a command",
+        doc_out="the response"
     )
     def send_cmd(self, cmd):
         return self._send_cmd(cmd)
@@ -647,7 +635,7 @@ class PhyMotionAxis(Device):
     @command
     def abort(self):
         self.send_cmd("SN")
-        self.set_state(DevState.ON)    
+        self.set_state(DevState.ON)
 
     @command
     def reset_errors(self):

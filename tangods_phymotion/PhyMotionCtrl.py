@@ -2,10 +2,8 @@
 # coding: utf8
 # PhyMotionCtrl
 
-from tango import DevState, AttrWriteType, DispLevel
-from tango.server import Device, attribute, command, device_property
-import time
-import sys
+from tango import DevState
+from tango.server import Device, command, device_property
 import socket
 
 

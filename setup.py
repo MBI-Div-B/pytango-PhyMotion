@@ -1,9 +1,10 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="tangods_phymotion",
-    version="0.0.1",
-    description="Tango device server written in PyTango for a Phytron phyMotion stepper motor controller using the TCP/IP network interface",
+    version="1.0.0",
+    description="Tango device server written in PyTango for a Phytron \
+        phyMotion stepper motor controller using the TCP/IP network interface",
     author="Daniel Schick",
     author_email="schick@mbi-berlin.de",
     python_requires=">=3.6",
@@ -14,7 +15,7 @@ setup(
         "pytango",
         "socket",
     ],
-    url="https://github.com/MBI-Div-b/pytango-phyMotion",
+    url="https://github.com/MBI-Div-b/pytango-PhyMotion",
     keywords=[
         "tango device",
         "tango",
