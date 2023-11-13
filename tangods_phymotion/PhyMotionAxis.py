@@ -6,7 +6,6 @@ from tango import Database, DevFailed, AttrWriteType, DevState
 from tango import DeviceProxy, DispLevel
 from tango.server import device_property
 from tango.server import Device, attribute, command
-import sys
 from enum import IntEnum
 import time
 
@@ -251,7 +250,7 @@ class PhyMotionAxis(Device):
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
         doc=(
-            "0 = rotation; limit switched are ignored.\n"
+            "0 = rotation; limit switches are ignored.\n"
             "1 = linear; only hardware limit switches monitored.\n"
             "2 = linear; only software limit switches monitored.\n"
             "3 = linear; hardware and software limit switches monitored."
@@ -296,8 +295,9 @@ class PhyMotionAxis(Device):
             self.ctrl = DeviceProxy(self.CtrlDevice)
             self.info_stream("ctrl. device: {:s}".format(self.CtrlDevice))
         except DevFailed as df:
-            self.error_stream("failed to create proxy to {:s}".format(df))
-            sys.exit(255)
+            self.error_stream("failed to create proxy to {:s}".format(df))            
+            self.set_state(DevState.FAULT)
+            return
 
         # read all parameters
         self.read_all_parameters()

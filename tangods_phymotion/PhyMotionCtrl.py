@@ -30,17 +30,20 @@ class PhyMotionCtrl(Device):
         self.info_stream("init_device()")
         self.set_state(DevState.OFF)
 
-        # configure serial
+        # open socket connection
         self.con = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.con.connect((self.Address, self.Port))
-
-        self.info_stream("Address: {:s}".format(self.Address))
-        self.info_stream("Port = {:d}".format(self.Port))
-
-        self.set_state(DevState.ON)
+        try:
+            self.con.connect((self.Address, self.Port))
+            self.info_stream("Connected to {:s}:{:d}".format(self.Address, self.Port))
+            self.set_state(DevState.ON)
+        except Exception:
+            self.error_stream("Failed to open {:s}:{:d}".format(self.Address,
+                                                                self.Port))
+            self.set_state(DevState.FAULT)
 
     def delete_device(self):
         self.con.close()
+        self.set_state(DevState.OFF)
 
     @command(dtype_in=str, dtype_out=str)
     def write_read(self, cmd):
