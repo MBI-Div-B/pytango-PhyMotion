@@ -271,11 +271,16 @@ class PhyMotionAxis(Device):
     _statusbits = 25 * [0]
 
     # decorators
-    def update_parameters(func): 
-        def inner(self, value): 
-            func(self, value) 
+    def update_parameters(func):
+        """update_parameters
+        
+        decorator for setter-methods of attributes in order to update
+        the values of all parameters/attributes of the DS.
+        """
+        def inner(self, value):
+            func(self, value)
             self.read_all_parameters()
-        return inner 
+        return inner
 
     def init_device(self):
         super().init_device()
@@ -338,11 +343,11 @@ class PhyMotionAxis(Device):
         now = time.time()
         if now - self._last_status_query > self.TimeOut:
             status, position = self.send_cmd(["SE", "P20R"])
-            self.debug_stream(f"status: {status}")
             self.debug_stream(f"position: {position}")
             self._last_status_query = now
             self._statusbits = self._decode_status(int(status), 7)
-
+            self.debug_stream(f"status bits: {self._statusbits}")
+            # set current position
             self._all_parameters['P20R'] = position
 
             status_list = []
@@ -356,18 +361,20 @@ class PhyMotionAxis(Device):
                         status_list.append(_PHY_AXIS_STATUS_CODES[n])
             self.set_status("\n".join(status_list))
 
-            if any([self._statusbits[n] for n in [3, 19]]):
-                self.set_state(DevState.ON)
-            if any([self._statusbits[n] for n in [0, 16, 21, 22, 23]]):
-                self.set_state(DevState.MOVING)
-            if any([self._statusbits[n] for n in [4, 5, 6, 7, 8, 12]]) and int(self._all_parameters["P01R"]) > 0:
-                # no alarm for rotational stages
-                self.set_state(DevState.ALARM)
-            if any([self._statusbits[n] for n in [1, 11, 13, 14, 15]]):
-                self.set_state(DevState.FAULT)
             if any([self._statusbits[n] for n in [12]]):
                 # reset limit switch error on module
                 self.reset_errors()
+
+            if any([self._statusbits[n] for n in [3, 19]]):
+                self.set_state(DevState.ON)
+
+            if any([self._statusbits[n] for n in [0, 16, 21, 22, 23]]):
+                self.set_state(DevState.MOVING)
+            elif any([self._statusbits[n] for n in [4, 5, 6, 7, 8, 12]]) and int(self._all_parameters["P01R"]) > 0:
+                # no alarm for rotational stages
+                self.set_state(DevState.ALARM)
+            elif any([self._statusbits[n] for n in [1, 11, 13, 14, 15]]):
+                self.set_state(DevState.FAULT)
 
     # attribute read/write methods
     def read_sw_limit_minus(self):
@@ -410,6 +417,25 @@ class PhyMotionAxis(Device):
         answer = self.send_cmd("A{:.10f}".format(value))
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             DeviceProxy(self.get_name()).write_attribute("last_position", memorize_value)
 
     def read_last_position(self):
