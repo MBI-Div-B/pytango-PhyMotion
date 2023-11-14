@@ -13,7 +13,6 @@ setup(
     packages=["tangods_phymotion"],
     install_requires=[
         "pytango",
-        "socket",
     ],
     url="https://github.com/MBI-Div-b/pytango-PhyMotion",
     keywords=[
