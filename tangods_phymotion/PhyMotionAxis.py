@@ -6,7 +6,7 @@ from tango import Database, DevFailed, AttrWriteType, DevState
 from tango import DeviceProxy, DispLevel
 from tango.server import device_property
 from tango.server import Device, attribute, command
-import sys
+
 from enum import IntEnum
 import time
 
@@ -82,15 +82,10 @@ _PHY_AXIS_STATUS_CODES = [
 
 class PhyMotionAxis(Device):
     # device properties
-    CtrlDevice = device_property(
-        dtype="str",
-        default_value="domain/family/member"
-    )
+    CtrlDevice = device_property(dtype="str", default_value="domain/family/member")
 
     Axis = device_property(
-        dtype="int16",
-        default_value=1,
-        doc="Module number in controller (starts at 1)."
+        dtype="int16", default_value=1, doc="Module number in controller (starts at 1)."
     )
 
     TimeOut = device_property(
@@ -99,7 +94,7 @@ class PhyMotionAxis(Device):
         doc=(
             "Timeout in seconds between status requests\n"
             "to reduce communication traffic."
-        )
+        ),
     )
 
     # device attributes
@@ -192,7 +187,7 @@ class PhyMotionAxis(Device):
             "I1AM01: 0 to 2.50 A_rms\n"
             "I1AM02: 0 to 3.50 A_rms\n"
             "I1AM02 LPS: 0 to 6.50 A_rms\n"
-        )
+        ),
     )
 
     run_current = attribute(
@@ -208,7 +203,7 @@ class PhyMotionAxis(Device):
             "I1AM01: 0 to 2.50 A_rms\n"
             "I1AM02: 0 to 3.50 A_rms\n"
             "I1AM02 LPS: 0 to 6.50 A_rms\n"
-        )
+        ),
     )
 
     limit_switch_type = attribute(
@@ -216,9 +211,7 @@ class PhyMotionAxis(Device):
         label="limit switch type",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
-        doc=(
-            "NOC or NCC for limit-, reference/center, limit+"
-        ),
+        doc=("NOC or NCC for limit-, reference/center, limit+"),
     )
 
     steps_per_unit = attribute(
@@ -268,11 +261,6 @@ class PhyMotionAxis(Device):
 
     # private class properties
     __NACK = chr(0x15)  # command failed
-    _inverted = False
-    _unit = MovementUnit.steps
-    _steps_per_unit = 1.0
-    _last_status_query = 0
-    _statusbits = 25 * [0]
 
     # decorators
     def update_parameters(func):
@@ -281,9 +269,11 @@ class PhyMotionAxis(Device):
         decorator for setter-methods of attributes in order to update
         the values of all parameters/attributes of the DS.
         """
+
         def inner(self, value):
             func(self, value)
             self.read_all_parameters()
+
         return inner
 
     def init_device(self):
@@ -297,7 +287,14 @@ class PhyMotionAxis(Device):
             self.info_stream("ctrl. device: {:s}".format(self.CtrlDevice))
         except DevFailed as df:
             self.error_stream("failed to create proxy to {:s}".format(df))
-            sys.exit(255)
+            self.set_state(DevState.FAULT)
+            return
+
+        self._inverted = False
+        self._unit = MovementUnit.steps
+        self._steps_per_unit = 1.0
+        self._last_status_query = 0
+        self._statusbits = 25 * [0]
 
         # read all parameters
         self.read_all_parameters()
@@ -305,9 +302,7 @@ class PhyMotionAxis(Device):
         # read memorized attributes from Database
         self.db = Database()
         try:
-            attr = self.db.get_device_attribute_property(
-                self.get_name(), ["inverted"]
-            )
+            attr = self.db.get_device_attribute_property(self.get_name(), ["inverted"])
             if attr["inverted"]["__value"][0] == "true":
                 self._inverted = True
             else:
@@ -352,15 +347,15 @@ class PhyMotionAxis(Device):
             self._statusbits = self._decode_status(int(status), 7)
             self.debug_stream(f"status bits: {self._statusbits}")
             # set current position
-            self._all_parameters['P20R'] = position
+            self._all_parameters["P20R"] = position
 
             status_list = []
             for n, bit_value in enumerate(self._statusbits):
                 if bit_value:
                     if (n == 4 or n == 7) and self._inverted:
-                        status_list.append(_PHY_AXIS_STATUS_CODES[n+1])
+                        status_list.append(_PHY_AXIS_STATUS_CODES[n + 1])
                     elif (n == 5 or n == 8) and self._inverted:
-                        status_list.append(_PHY_AXIS_STATUS_CODES[n-1])
+                        status_list.append(_PHY_AXIS_STATUS_CODES[n - 1])
                     else:
                         status_list.append(_PHY_AXIS_STATUS_CODES[n])
             self.set_status("\n".join(status_list))
@@ -374,7 +369,10 @@ class PhyMotionAxis(Device):
 
             if any([self._statusbits[n] for n in [0, 16, 21, 22, 23]]):
                 self.set_state(DevState.MOVING)
-            elif any([self._statusbits[n] for n in [4, 5, 6, 7, 8, 12]]) and int(self._all_parameters["P01R"]) > 0:
+            elif (
+                any([self._statusbits[n] for n in [4, 5, 6, 7, 8, 12]])
+                and int(self._all_parameters["P01R"]) > 0
+            ):
                 # no alarm for rotational stages
                 self.set_state(DevState.ALARM)
             elif any([self._statusbits[n] for n in [1, 11, 13, 14, 15]]):
@@ -383,9 +381,9 @@ class PhyMotionAxis(Device):
     # attribute read/write methods
     def read_sw_limit_minus(self):
         if self._inverted:
-            return -1 * float(self._all_parameters['P23R'])
+            return -1 * float(self._all_parameters["P23R"])
         else:
-            return float(self._all_parameters['P24R'])
+            return float(self._all_parameters["P24R"])
 
     @update_parameters
     def write_sw_limit_minus(self, value):
@@ -396,19 +394,19 @@ class PhyMotionAxis(Device):
 
     def read_sw_limit_plus(self):
         if self._inverted:
-            return -1 * float(self._all_parameters['P24R'])
+            return -1 * float(self._all_parameters["P24R"])
         else:
-            return float(self._all_parameters['P23R'])
+            return float(self._all_parameters["P23R"])
 
     @update_parameters
     def write_sw_limit_plus(self, value):
         if self._inverted:
-            self.send_cmd("P24S{:f}".format(-1*value))
+            self.send_cmd("P24S{:f}".format(-1 * value))
         else:
             self.send_cmd("P23S{:f}".format(value))
 
     def read_position(self):
-        ret = float(self._all_parameters['P20R'])
+        ret = float(self._all_parameters["P20R"])
         if self._inverted:
             return -1 * ret
         else:
@@ -422,7 +420,8 @@ class PhyMotionAxis(Device):
         if answer != self.__NACK:
             self.set_state(DevState.MOVING)
             DeviceProxy(self.get_name()).write_attribute(
-                "last_position", memorize_value)
+                "last_position", memorize_value
+            )
 
     def read_last_position(self):
         return self._last_position
@@ -531,7 +530,7 @@ class PhyMotionAxis(Device):
             self._unit = MovementUnit.inch
         elif res == 4:
             self._unit = MovementUnit.degree
-        self._unit = MovementUnit(res-1)
+        self._unit = MovementUnit(res - 1)
         return self._unit
 
     @update_parameters
@@ -547,8 +546,8 @@ class PhyMotionAxis(Device):
             "last_position",
             "sw_limit_minus",
             "sw_limit_plus",
-            "backlash_compensation"
-            ]
+            "backlash_compensation",
+        ]
         for attr in attributes:
             ac3 = self.get_attribute_config_3(attr)
             ac3[0].unit = self._unit.name.encode("utf-8")
@@ -563,10 +562,10 @@ class PhyMotionAxis(Device):
         if isinstance(cmd_str, list):
             cmd = ""
             for sub_cmd in cmd_str:
-                cmd = cmd + ' ' + '{:d}.1{:s}'.format(self.Axis, sub_cmd)
+                cmd = cmd + " " + "{:d}.1{:s}".format(self.Axis, sub_cmd)
             res = self.ctrl.write_read(cmd).split(chr(6))
         else:
-            cmd = '{:d}.1{:s}'.format(self.Axis, cmd_str)
+            cmd = "{:d}.1{:s}".format(self.Axis, cmd_str)
             res = self.ctrl.write_read(cmd)
         if res == self.__NACK:
             self.set_state(DevState.FAULT)
@@ -578,9 +577,7 @@ class PhyMotionAxis(Device):
 
     # commands
     @command(
-        dtype_in=str, dtype_out=str,
-        doc_in="enter a command",
-        doc_out="the response"
+        dtype_in=str, dtype_out=str, doc_in="enter a command", doc_out="the response"
     )
     def send_cmd(self, cmd):
         return self._send_cmd(cmd)

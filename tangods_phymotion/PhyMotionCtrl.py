@@ -44,13 +44,18 @@ class PhyMotionCtrl(Device):
 
     @command(dtype_in=str, dtype_out=str)
     def write_read(self, cmd):
-        cmd = self.__STX + "0" + cmd + ':XX' + self.__ETX
+        cmd = self.__STX + "0" + cmd + ":XX" + self.__ETX
         self.debug_stream("write command: {:s}".format(cmd))
         self.con.send(cmd.encode("utf-8"))
         res = self.con.recv(1024).decode("utf-8")
         self.debug_stream("read response: {:s}".format(res))
         if self.__ACK in res:
-            return res.lstrip(self.__STX).lstrip(self.__ACK).rstrip(self.__ETX).split(':')[0]
+            return (
+                res.lstrip(self.__STX)
+                .lstrip(self.__ACK)
+                .rstrip(self.__ETX)
+                .split(":")[0]
+            )
         else:
             # no acknowledgment in response
             return self.__NACK
