@@ -520,17 +520,9 @@ class PhyMotionAxis(Device):
         self.send_cmd("P01S{:d}".format(int(value)))
 
     def read_movement_unit(self):
-        res = int(self._all_parameters["P02R"])
-        if res == 1:
-            self._unit = MovementUnit.steps
-        elif res == 2:
-            self._unit = MovementUnit.mm
-        elif res == 3:
-            self._unit = MovementUnit.inch
-        elif res == 4:
-            self._unit = MovementUnit.degree
-        self._unit = MovementUnit(res - 1)
-        return self._unit
+        res = int(self._all_parameters["P02R"])-1
+        self._unit = MovementUnit(res)
+        return res
 
     @update_parameters
     def write_movement_unit(self, value):
