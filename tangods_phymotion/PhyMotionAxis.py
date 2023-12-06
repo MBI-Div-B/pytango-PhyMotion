@@ -9,6 +9,13 @@ from tango.server import Device, attribute, command
 import time
 
 
+_MOVEMENT_UNITS = [
+    "steps",
+    "mm",
+    "inch",
+    "degree"
+]
+
 _PHY_AXIS_STATUS_CODES = [
     "Axis busy",  # 0
     "Command invalid",  # 1
@@ -228,7 +235,7 @@ class PhyMotionAxis(Device):
             "linear hw limit",
             "linear sw limit",
             "linear hw+sw limit"
-            ],
+        ],
         label="type of movement",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -242,12 +249,7 @@ class PhyMotionAxis(Device):
 
     movement_unit = attribute(
         dtype="DevEnum",
-        enum_labels=[
-            "steps",
-            "mm",
-            "inch",
-            "degree"
-            ],
+        enum_labels=_MOVEMENT_UNITS,
         label="unit",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -286,7 +288,6 @@ class PhyMotionAxis(Device):
             return
 
         self._inverted = False
-        self._unit = MovementUnit.steps
         self._steps_per_unit = 1.0
         self._last_status_query = 0
         self._statusbits = 25 * [0]
@@ -468,7 +469,7 @@ class PhyMotionAxis(Device):
         self.send_cmd("P40S{:d}".format(value))
 
     def read_limit_switch_type(self):
-        return LimitSwitchType(int(self._all_parameters["P27R"]))
+        return int(self._all_parameters["P27R"])
 
     @update_parameters
     def write_limit_switch_type(self, value):
@@ -509,31 +510,22 @@ class PhyMotionAxis(Device):
         self.send_cmd("P25S{:f}".format(float(value)))
 
     def read_type_of_movement(self):
-        return MovementType(int(self._all_parameters["P01R"]))
+        return int(self._all_parameters["P01R"])
 
     @update_parameters
     def write_type_of_movement(self, value):
         self.send_cmd("P01S{:d}".format(int(value)))
 
     def read_movement_unit(self):
-        return MovementUnit(int(self._all_parameters["P02R"])-1)
+        return int(self._all_parameters["P02R"])-1
 
     @update_parameters
     def write_movement_unit(self, value):
-        res = int(value) + 1
-        self.send_cmd("P02S{:d}".format(res))
-        if res == 1:
-            self._unit = MovementUnit.steps
-        elif res == 2:
-            self._unit = MovementUnit.mm
-        elif res == 3:
-            self._unit = MovementUnit.inch
-        elif res == 4:
-            self._unit = MovementUnit.degree
-        self.set_display_unit()
+        self.send_cmd("P02S{:d}".format(int(value) + 1))
+        self.set_display_unit(_MOVEMENT_UNITS[value])
 
     # internal methods
-    def set_display_unit(self):
+    def set_display_unit(self, unit):
         attributes = [
             "position",
             "last_position",
@@ -543,7 +535,7 @@ class PhyMotionAxis(Device):
         ]
         for attr in attributes:
             ac3 = self.get_attribute_config_3(attr)
-            ac3[0].unit = self._unit.name.encode("utf-8")
+            ac3[0].unit = unit.encode("utf-8")
             if (1 / self._steps_per_unit % 1) == 0.0:
                 ac3[0].format = b"%8d"
             else:
