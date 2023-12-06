@@ -6,48 +6,7 @@ from tango import Database, DevFailed, AttrWriteType, DevState
 from tango import DeviceProxy, DispLevel
 from tango.server import device_property
 from tango.server import Device, attribute, command
-from enum import IntEnum
 import time
-
-
-class MovementType(IntEnum):
-    rotational = 0
-    linear_hwlimit = 1
-    linear_swlimit = 2
-    linear_hwswlimit = 3
-
-
-class MovementUnit(IntEnum):
-    steps = 0
-    mm = 1
-    inch = 2
-    degree = 3
-
-
-class LimitSwitchType(IntEnum):
-    NCC_NCC_NCC = 0
-    NCC_NCC_NOC = 1
-    NOC_NCC_NCC = 2
-    NOC_NCC_NOC = 3
-    NCC_NOC_NCC = 4
-    NCC_NOC_NOC = 5
-    NOC_NOC_NCC = 6
-    NOC_NOC_NOC = 7
-
-
-class StepResolution(IntEnum):
-    step_1_1 = 0
-    step_1_2 = 1
-    step_2_5 = 2
-    step_1_4 = 3
-    step_1_5 = 4
-    step_1_8 = 5
-    step_1_10 = 6
-    step_1_16 = 7
-    step_1_20 = 8
-    step_1_32 = 9
-    step_1_64 = 10
-    step_1_128 = 11
 
 
 _PHY_AXIS_STATUS_CODES = [
@@ -206,7 +165,17 @@ class PhyMotionAxis(Device):
     )
 
     limit_switch_type = attribute(
-        dtype=LimitSwitchType,
+        dtype="DevEnum",
+        enum_labels=[
+            "NCC NCC NCC",
+            "NCC NCC NOC",
+            "NOC NCC NCC",
+            "NOC NCC NOC",
+            "NCC NOC NCC",
+            "NCC NOC NOC",
+            "NOC NOC NCC",
+            "NOC NOC NOC"
+            ],
         label="limit switch type",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -222,7 +191,22 @@ class PhyMotionAxis(Device):
     )
 
     step_resolution = attribute(
-        dtype=StepResolution,
+        dtype="DevEnum",
+        enum_labels=[
+            "1/1",
+            "1/2",
+            "1/2.5",
+            "1/4",
+            "1/5",
+            "1/8",
+            "1/10",
+            "1/16",
+            "1/20",
+            "1/32",
+            "1/64",
+            "1/128",
+            "1/256",
+            ],
         label="step resolution",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -238,7 +222,13 @@ class PhyMotionAxis(Device):
     )
 
     type_of_movement = attribute(
-        dtype=MovementType,
+        dtype="DevEnum",
+        enum_labels=[
+            "rotational",
+            "linear hw limit",
+            "linear sw limit",
+            "linear hw+sw limit"
+            ],
         label="type of movement",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -251,7 +241,13 @@ class PhyMotionAxis(Device):
     )
 
     movement_unit = attribute(
-        dtype=MovementUnit,
+        dtype="DevEnum",
+        enum_labels=[
+            "steps",
+            "mm",
+            "inch",
+            "degree"
+            ],
         label="unit",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
