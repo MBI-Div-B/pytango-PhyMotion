@@ -484,8 +484,6 @@ class PhyMotionAxis(Device):
     def write_steps_per_unit(self, value):
         # inverse of spindle pitch (see manual page 77)
         self.send_cmd("P03S{:10.8f}".format(1 / value))
-        # update display unit
-        self.set_display_unit()
 
     def read_step_resolution(self):
         return int(self._all_parameters["P45R"])
