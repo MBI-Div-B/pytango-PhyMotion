@@ -288,7 +288,6 @@ class PhyMotionAxis(Device):
             return
 
         self._inverted = False
-        self._steps_per_unit = 1.0
         self._last_status_query = 0
         self._statusbits = 25 * [0]
 
@@ -477,13 +476,13 @@ class PhyMotionAxis(Device):
 
     def read_steps_per_unit(self):
         # inverse of spindle pitch (see manual page 77)
-        self._steps_per_unit = 1 / float(self._all_parameters["P03R"])
-        return self._steps_per_unit
+        return 1 / float(self._all_parameters["P03R"])
 
     @update_parameters
     def write_steps_per_unit(self, value):
         # inverse of spindle pitch (see manual page 77)
-        self.send_cmd("P03S{:10.8f}".format(1 / value))
+        self.send_cmd("P03S{:10.8f}".format(1/value))
+        self.set_display_unit(steps_per_unit=value)
 
     def read_step_resolution(self):
         return int(self._all_parameters["P45R"])
@@ -520,10 +519,10 @@ class PhyMotionAxis(Device):
     @update_parameters
     def write_movement_unit(self, value):
         self.send_cmd("P02S{:d}".format(int(value) + 1))
-        self.set_display_unit(_MOVEMENT_UNITS[value])
+        self.set_display_unit(unit=_MOVEMENT_UNITS[value])
 
     # internal methods
-    def set_display_unit(self, unit):
+    def set_display_unit(self, unit="", steps_per_unit=0):
         attributes = [
             "position",
             "last_position",
@@ -533,11 +532,13 @@ class PhyMotionAxis(Device):
         ]
         for attr in attributes:
             ac3 = self.get_attribute_config_3(attr)
-            ac3[0].unit = unit.encode("utf-8")
-            if (1 / self._steps_per_unit % 1) == 0.0:
-                ac3[0].format = b"%8d"
-            else:
-                ac3[0].format = b"%8.3f"
+            if len(unit) > 0:
+                ac3[0].unit = unit.encode("utf-8")
+            if steps_per_unit > 0:
+                if (1 / steps_per_unit % 1) == 0.0:
+                    ac3[0].format = "%8d"
+                else:
+                    ac3[0].format = "%8.3f"
             self.set_attribute_config_3(ac3)
 
     def _send_cmd(self, cmd_str):
