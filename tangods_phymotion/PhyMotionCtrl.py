@@ -27,8 +27,8 @@ class PhyMotionCtrl(Device):
 
     def init_device(self):
         super().init_device(self)
+        self.set_state(DevState.INIT)
         self.info_stream("init_device()")
-        self.set_state(DevState.OFF)
 
         # open socket connection
         self.con = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

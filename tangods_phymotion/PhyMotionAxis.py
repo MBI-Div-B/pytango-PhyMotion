@@ -275,8 +275,8 @@ class PhyMotionAxis(Device):
 
     def init_device(self):
         super().init_device()
-        self.info_stream("init_device()")
-
+        self.info_stream("init_device()")        
+        self.set_state(DevState.INIT)
         self.info_stream("module axis: {:d}".format(self.Axis))
 
         try:
