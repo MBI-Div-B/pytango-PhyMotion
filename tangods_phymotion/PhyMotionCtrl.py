@@ -26,7 +26,7 @@ class PhyMotionCtrl(Device):
     __ETX = chr(3)  # end of text
 
     def init_device(self):
-        Device.init_device(self)
+        super().init_device(self)
         self.info_stream("init_device()")
         self.set_state(DevState.OFF)
 
