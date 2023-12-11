@@ -105,14 +105,16 @@ class PhyMotionAxis(Device):
         dtype="bool",
         label="inverted",
         memorized=True,
+        hw_memorized=True,
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
     )
 
     acceleration = attribute(
-        dtype="int",
+        dtype="float",
+        format="%8.3f",
         label="acceleration",
-        unit="Hz",
+        unit="steps/s\u0032",
         min_value=4000,
         max_value=500000,
         access=AttrWriteType.READ_WRITE,
@@ -120,9 +122,10 @@ class PhyMotionAxis(Device):
     )
 
     velocity = attribute(
-        dtype="int",
+        dtype="float",
+        format="%8.3f",
         label="velocity",
-        unit="Hz",
+        unit="steps/s",
         min_value=0,
         max_value=40000,
         access=AttrWriteType.READ_WRITE,
@@ -130,9 +133,10 @@ class PhyMotionAxis(Device):
     )
 
     homing_velocity = attribute(
-        dtype="int",
+        dtype="float",
+        format="%8.3f",
         label="homing velocity",
-        unit="Hz",
+        unit="steps/s",
         min_value=0,
         max_value=40000,
         access=AttrWriteType.READ_WRITE,
@@ -287,23 +291,17 @@ class PhyMotionAxis(Device):
             self.set_state(DevState.FAULT)
             return
 
-        self._inverted = False
         self._last_status_query = 0
         self._statusbits = 25 * [0]
+        self._inverted = False
 
         # read all parameters
         self.read_all_parameters()
-
-        # read memorized attributes from Database
-        self.db = Database()
-        try:
-            attr = self.db.get_device_attribute_property(self.get_name(), ["inverted"])
-            if attr["inverted"]["__value"][0] == "true":
-                self._inverted = True
-            else:
-                self._inverted = False
-        except Exception:
-            self._inverted = False
+        # update units and formatting
+        self.set_display_unit(
+            unit=_MOVEMENT_UNITS[int(self._all_parameters['P02R'])-1],
+            steps_per_unit=1/float(self._all_parameters['P03R'])
+        )
 
         self.set_state(DevState.ON)
 
@@ -431,25 +429,28 @@ class PhyMotionAxis(Device):
         self._inverted = bool(value)
 
     def read_acceleration(self):
-        return int(self._all_parameters["P15R"])
+        return int(self._all_parameters["P15R"])*float(self._all_parameters["P03R"])
 
     @update_parameters
     def write_acceleration(self, value):
-        self.send_cmd("P15S{:d}".format(value))
+        acceleration = int(value/float(self._all_parameters["P03R"]))
+        self.send_cmd("P15S{:d}".format(acceleration))
 
     def read_velocity(self):
-        return int(self._all_parameters["P14R"])
+        return int(self._all_parameters["P14R"])*float(self._all_parameters["P03R"])
 
     @update_parameters
     def write_velocity(self, value):
-        self.send_cmd("P14S{:d}".format(value))
+        velocity = int(value/float(self._all_parameters["P03R"]))
+        self.send_cmd("P14S{:d}".format(velocity))
 
     def read_homing_velocity(self):
-        return int(self._all_parameters["P08R"])
+        return int(self._all_parameters["P08R"])*float(self._all_parameters["P03R"])
 
     @update_parameters
     def write_homing_velocity(self, value):
-        self.send_cmd("P08S{:d}".format(value))
+        velocity = int(value/float(self._all_parameters["P03R"]))
+        self.send_cmd("P08S{:d}".format(velocity))
 
     def read_run_current(self):
         return float(self._all_parameters["P41R"]) / 100
@@ -482,7 +483,10 @@ class PhyMotionAxis(Device):
     def write_steps_per_unit(self, value):
         # inverse of spindle pitch (see manual page 77)
         self.send_cmd("P03S{:10.8f}".format(1/value))
-        self.set_display_unit(steps_per_unit=value)
+        self.set_display_unit(
+            unit=_MOVEMENT_UNITS[int(self._all_parameters['P02R'])-1],
+            steps_per_unit=value
+            )
 
     def read_step_resolution(self):
         return int(self._all_parameters["P45R"])
@@ -519,7 +523,10 @@ class PhyMotionAxis(Device):
     @update_parameters
     def write_movement_unit(self, value):
         self.send_cmd("P02S{:d}".format(int(value) + 1))
-        self.set_display_unit(unit=_MOVEMENT_UNITS[value])
+        self.set_display_unit(
+            unit=_MOVEMENT_UNITS[value],
+            steps_per_unit=1/float(self._all_parameters['P03R'])
+            )
 
     # internal methods
     def set_display_unit(self, unit="", steps_per_unit=0):
@@ -529,16 +536,28 @@ class PhyMotionAxis(Device):
             "sw_limit_minus",
             "sw_limit_plus",
             "backlash_compensation",
+            "velocity",
+            "homing_velocity",
+            "acceleration",
         ]
         for attr in attributes:
             ac3 = self.get_attribute_config_3(attr)
-            if len(unit) > 0:
-                ac3[0].unit = unit.encode("utf-8")
-            if steps_per_unit > 0:
-                if (1 / steps_per_unit % 1) == 0.0:
-                    ac3[0].format = "%8d"
-                else:
-                    ac3[0].format = "%8.3f"
+            if attr == "velocity" or attr == "homing_velocity":
+                unit_set = unit + "/s"
+                ac3[0].min_value = str(0)
+                ac3[0].max_value = str(40000 / steps_per_unit)
+            elif attr == "acceleration":
+                unit_set = unit + "/s\u0032"
+                ac3[0].min_value = str(4000 / steps_per_unit)
+                ac3[0].max_value = str(500000 / steps_per_unit)
+            else:
+                unit_set = unit
+            ac3[0].unit = unit_set.encode("utf-8")
+
+            if (1 / steps_per_unit % 1) == 0.0:
+                ac3[0].format = "%8d"
+            else:
+                ac3[0].format = "%8.3f"
             self.set_attribute_config_3(ac3)
 
     def _send_cmd(self, cmd_str):
