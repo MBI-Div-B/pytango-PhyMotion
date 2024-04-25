@@ -46,7 +46,7 @@ class PhyMotionCtrl(Device):
         self.con.close()
         self.set_state(DevState.OFF)
 
-    @command(dtype_in=str, dtype_out=str)
+    @command(dtype_in=str, dtype_out=str, fisallowed="is_write_read_allowed")
     def write_read(self, cmd):
         """
         see phymotion reference for command syntax (page 12)
@@ -74,10 +74,10 @@ class PhyMotionCtrl(Device):
     def dump_to_eprom(self):
         self.write_read("SA")
 
-    def is_write_allowed(self):
-        if self.get_state() in [DevState.FAULT, DevState.OFF]:
-            return False
-        return True
+    def is_write_read_allowed(self):
+        is_allowed = self.get_state() not in [DevState.FAULT, DevState.OFF]
+        self.debug_stream(f"is_write_read_allowed(): {is_allowed}")
+        return is_allowed
 
 
 if __name__ == "__main__":
