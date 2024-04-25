@@ -37,8 +37,9 @@ class PhyMotionCtrl(Device):
             self.info_stream("Connected to {:s}:{:d}".format(self.Address, self.Port))
             self.set_state(DevState.ON)
         except Exception:
-            self.error_stream("Failed to open {:s}:{:d}".format(self.Address,
-                                                                self.Port))
+            self.error_stream(
+                "Failed to open {:s}:{:d}".format(self.Address, self.Port)
+            )
             self.set_state(DevState.FAULT)
 
     def delete_device(self):
