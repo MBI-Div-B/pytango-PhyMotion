@@ -48,6 +48,12 @@ class PhyMotionCtrl(Device):
 
     @command(dtype_in=str, dtype_out=str)
     def write_read(self, cmd):
+        """
+        see phymotion reference for command syntax (page 12)
+        address is always 0 (except for rotary switch)
+        then the command follows
+        :XX is the flag to skip the checksum-verify
+        """
         cmd = self.__STX + "0" + cmd + ":XX" + self.__ETX
         self.debug_stream("write command: {:s}".format(cmd))
         self.con.send(cmd.encode("utf-8"))
@@ -63,6 +69,10 @@ class PhyMotionCtrl(Device):
         else:
             # no acknowledgment in response
             return self.__NACK
+
+    @command
+    def dump_to_eprom(self):
+        self.write_read("SA")
 
     def is_write_allowed(self):
         if self.get_state() in [DevState.FAULT, DevState.OFF]:
