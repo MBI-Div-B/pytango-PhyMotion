@@ -37,16 +37,23 @@ class PhyMotionCtrl(Device):
             self.info_stream("Connected to {:s}:{:d}".format(self.Address, self.Port))
             self.set_state(DevState.ON)
         except Exception:
-            self.error_stream("Failed to open {:s}:{:d}".format(self.Address,
-                                                                self.Port))
+            self.error_stream(
+                "Failed to open {:s}:{:d}".format(self.Address, self.Port)
+            )
             self.set_state(DevState.FAULT)
 
     def delete_device(self):
         self.con.close()
         self.set_state(DevState.OFF)
 
-    @command(dtype_in=str, dtype_out=str)
+    @command(dtype_in=str, dtype_out=str, fisallowed="is_write_read_allowed")
     def write_read(self, cmd):
+        """
+        see phymotion reference for command syntax (page 12)
+        address is always 0 (except for rotary switch)
+        then the command follows
+        :XX is the flag to skip the checksum-verify
+        """
         cmd = self.__STX + "0" + cmd + ":XX" + self.__ETX
         self.debug_stream("write command: {:s}".format(cmd))
         self.con.send(cmd.encode("utf-8"))
@@ -63,10 +70,14 @@ class PhyMotionCtrl(Device):
             # no acknowledgment in response
             return self.__NACK
 
-    def is_write_allowed(self):
-        if self.get_state() in [DevState.FAULT, DevState.OFF]:
-            return False
-        return True
+    @command
+    def dump_to_eprom(self):
+        self.write_read("SA")
+
+    def is_write_read_allowed(self):
+        is_allowed = self.get_state() not in [DevState.FAULT, DevState.OFF]
+        self.debug_stream(f"is_write_read_allowed(): {is_allowed}")
+        return is_allowed
 
 
 if __name__ == "__main__":

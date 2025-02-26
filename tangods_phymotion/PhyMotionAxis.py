@@ -9,12 +9,7 @@ from tango.server import Device, attribute, command
 import time
 
 
-_MOVEMENT_UNITS = [
-    "steps",
-    "mm",
-    "inch",
-    "degree"
-]
+_MOVEMENT_UNITS = ["steps", "mm", "inch", "degree"]
 
 _PHY_AXIS_STATUS_CODES = [
     "Axis busy",  # 0
@@ -185,8 +180,8 @@ class PhyMotionAxis(Device):
             "NCC NOC NCC",
             "NCC NOC NOC",
             "NOC NOC NCC",
-            "NOC NOC NOC"
-            ],
+            "NOC NOC NOC",
+        ],
         label="limit switch type",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -217,7 +212,7 @@ class PhyMotionAxis(Device):
             "1/64",
             "1/128",
             "1/256",
-            ],
+        ],
         label="step resolution",
         access=AttrWriteType.READ_WRITE,
         display_level=DispLevel.EXPERT,
@@ -238,7 +233,7 @@ class PhyMotionAxis(Device):
             "rotational",
             "linear hw limit",
             "linear sw limit",
-            "linear hw+sw limit"
+            "linear hw+sw limit",
         ],
         label="type of movement",
         access=AttrWriteType.READ_WRITE,
@@ -279,7 +274,7 @@ class PhyMotionAxis(Device):
 
     def init_device(self):
         super().init_device()
-        self.info_stream("init_device()")        
+        self.info_stream("init_device()")
         self.set_state(DevState.INIT)
         self.info_stream("module axis: {:d}".format(self.Axis))
 
@@ -299,8 +294,8 @@ class PhyMotionAxis(Device):
         self.read_all_parameters()
         # update units and formatting
         self.set_display_unit(
-            unit=_MOVEMENT_UNITS[int(self._all_parameters['P02R'])-1],
-            steps_per_unit=1/float(self._all_parameters['P03R'])
+            unit=_MOVEMENT_UNITS[int(self._all_parameters["P02R"]) - 1],
+            steps_per_unit=1 / float(self._all_parameters["P03R"]),
         )
 
         self.set_state(DevState.ON)
@@ -429,27 +424,27 @@ class PhyMotionAxis(Device):
         self._inverted = bool(value)
 
     def read_acceleration(self):
-        return int(self._all_parameters["P15R"])*float(self._all_parameters["P03R"])
+        return int(self._all_parameters["P15R"]) * float(self._all_parameters["P03R"])
 
     @update_parameters
     def write_acceleration(self, value):
-        acceleration = int(value/float(self._all_parameters["P03R"]))
+        acceleration = int(value / float(self._all_parameters["P03R"]))
         self.send_cmd("P15S{:d}".format(acceleration))
 
     def read_velocity(self):
-        return int(self._all_parameters["P14R"])*float(self._all_parameters["P03R"])
+        return int(self._all_parameters["P14R"]) * float(self._all_parameters["P03R"])
 
     @update_parameters
     def write_velocity(self, value):
-        velocity = int(value/float(self._all_parameters["P03R"]))
+        velocity = int(value / float(self._all_parameters["P03R"]))
         self.send_cmd("P14S{:d}".format(velocity))
 
     def read_homing_velocity(self):
-        return int(self._all_parameters["P08R"])*float(self._all_parameters["P03R"])
+        return int(self._all_parameters["P08R"]) * float(self._all_parameters["P03R"])
 
     @update_parameters
     def write_homing_velocity(self, value):
-        velocity = int(value/float(self._all_parameters["P03R"]))
+        velocity = int(value / float(self._all_parameters["P03R"]))
         self.send_cmd("P08S{:d}".format(velocity))
 
     def read_run_current(self):
@@ -482,11 +477,11 @@ class PhyMotionAxis(Device):
     @update_parameters
     def write_steps_per_unit(self, value):
         # inverse of spindle pitch (see manual page 77)
-        self.send_cmd("P03S{:10.8f}".format(1/value))
+        self.send_cmd("P03S{:10.8f}".format(1 / value))
         self.set_display_unit(
-            unit=_MOVEMENT_UNITS[int(self._all_parameters['P02R'])-1],
-            steps_per_unit=value
-            )
+            unit=_MOVEMENT_UNITS[int(self._all_parameters["P02R"]) - 1],
+            steps_per_unit=value,
+        )
 
     def read_step_resolution(self):
         return int(self._all_parameters["P45R"])
@@ -518,15 +513,15 @@ class PhyMotionAxis(Device):
         self.send_cmd("P01S{:d}".format(int(value)))
 
     def read_movement_unit(self):
-        return int(self._all_parameters["P02R"])-1
+        return int(self._all_parameters["P02R"]) - 1
 
     @update_parameters
     def write_movement_unit(self, value):
         self.send_cmd("P02S{:d}".format(int(value) + 1))
         self.set_display_unit(
             unit=_MOVEMENT_UNITS[value],
-            steps_per_unit=1/float(self._all_parameters['P03R'])
-            )
+            steps_per_unit=1 / float(self._all_parameters["P03R"]),
+        )
 
     # internal methods
     def set_display_unit(self, unit="", steps_per_unit=0):
@@ -640,12 +635,6 @@ class PhyMotionAxis(Device):
     @command
     def reset_errors(self):
         self.send_cmd("SEC")
-
-    @command(dtype_out=str)
-    def write_to_eeprom(self):
-        self._send_cmd("SA")
-        self.info_stream("parameters written to EEPROM")
-        return "parameters written to EEPROM"
 
     @command()
     def read_all_parameters(self):
